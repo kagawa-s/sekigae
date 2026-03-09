@@ -7,6 +7,26 @@ import io
 import os
 import time
 from math import ceil
+import os
+import requests
+from PIL import ImageFont
+
+def get_japanese_font():
+    # フォントの保存パス
+    font_path = "NotoSansJP-Regular.ttf"
+    
+    # フォントがなければダウンロード
+    if not os.path.exists(font_path):
+        url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf"
+        response = requests.get(url)
+        with open(font_path, "wb") as f:
+            f.write(response.content)
+    
+    return font_path
+
+# 画像生成している部分で、このフォントを指定する
+font_file = get_japanese_font()
+# 例: font = ImageFont.truetype(font_file, 20)
 
 # --- ページ設定 ---
 st.set_page_config(page_title="席替えやります", layout="wide")
@@ -263,4 +283,5 @@ def main():
                             st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
+
     main()
