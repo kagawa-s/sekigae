@@ -266,17 +266,6 @@ def main():
                 st.session_state.swap_idx = None
                 st.rerun()
 
-        # --- ここを修正：ボタンのロジックをシンプルに ---
-        if names:
-            # まだ座席がない場合は「生成」、すでにある場合は「再生成」と表示を変える
-            button_label = "🔄 座席を再生成" if st.session_state.seats else "🪑 座席を生成"
-            
-            if st.button(button_label, use_container_width=True):
-                # 既存のデータをクリアして新しく作り直す
-                st.session_state.seats = [{"no": i+1, "name": n, "fixed": False} for i, n in enumerate(names)]
-                st.session_state.swap_idx = None # 入れ替え選択中もリセット
-                st.rerun()
-
         if st.session_state.seats:
             st.divider()
             mode = st.radio("操作モード", ["席を入れ替える", "ピンで固定する"])
