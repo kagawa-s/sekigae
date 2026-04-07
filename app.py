@@ -150,7 +150,7 @@ def get_japanese_font(size):
     return ImageFont.truetype(font_path, size)
 
 def create_png(seats, num_cols):
-    W, H = 2400, 1800
+    W, H = 2400, 1800  # 全体のサイズ
     img = Image.new("RGB", (W, H), "#F8F9FA")
     draw = ImageDraw.Draw(img)
     f_t = get_japanese_font(70); f_n = get_japanese_font(45); f_s = get_japanese_font(25); f_p = get_japanese_font(30)
@@ -158,17 +158,21 @@ def create_png(seats, num_cols):
     # --- 1. レイアウト計算 ---
     l_map = main_logic_get_layout(len(seats), num_cols)
     num_rows = max(r for r, c in l_map) + 1
-    cw, ch = (W - 200) // num_cols, (H - 300) // num_rows
+    
+    # 余白を考慮したセルの大きさ計算
+    # 左右に100ずつ、上に100、下に300（教卓用）の余白を確保
+    cw = (W - 200) // num_cols
+    ch = (H - 450) // num_rows 
     all_full_names = [s['name'] for s in seats]
 
-    # --- 2. 座席の描画 (教卓を下にするため、全体を少し上に寄せる) ---
+    # --- 2. 座席の描画 ---
     for i, seat in enumerate(seats):
         r, c = l_map[i]
         display_row = r
         display_col = (num_cols - 1) - c
         
-        # y1 の計算：教卓を下に置くスペースを作るため、少し上にオフセット
-        x1, y1 = 100 + display_col * cw + 20, 100 + (num_rows - 1 - display_row) * ch + 20
+        # y1の開始位置を 80 にして、少し上に寄せます
+        x1, y1 = 100 + display_col * cw + 20, 80 + (num_rows - 1 - display_row) * ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
         
         bg_color, line_color = ("#FFFBEB", "#F59E0B") if seat.get('fixed') else ("white", "#CBD5E1")
@@ -179,11 +183,11 @@ def create_png(seats, num_cols):
         display_name = get_output_name(seat['name'], all_full_names)
         draw.text((mid_x, mid_y + 40), display_name, fill="#1E293B", font=f_n, anchor="mm")
 
-    # --- 3. 教卓の描画 (一番下に配置) ---
-    # 座席の描画が終わった後の y 座標（下部）に描画します
-    kyotaku_y = 150 + num_rows * ch + 50 
-    draw.rectangle([W//2-200, kyotaku_y, W//2+200, kyotaku_y + 100], fill="#334155")
-    draw.text((W//2, kyotaku_y + 50), "教 卓", fill="white", font=f_t, anchor="mm")
+    # --- 3. 教卓の描画 (位置を微調整) ---
+    # 座席の最終行から少し離し、かつ用紙の底（H=1800）から浮かせます
+    kyotaku_y_start = 120 + num_rows * ch + 30 
+    draw.rectangle([W//2-250, kyotaku_y_start, W//2+250, kyotaku_y_start + 120], fill="#334155")
+    draw.text((W//2, kyotaku_y_start + 60), "教 卓", fill="white", font=f_t, anchor="mm")
 
     buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
 
