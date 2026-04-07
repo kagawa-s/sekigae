@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 import time
-import requests  # フォント取得用にのみ追加
+import requests
 from math import ceil
 
 # --- ページ設定 ---
@@ -135,10 +135,8 @@ def main_logic_get_layout(num_students, num_cols):
             layout.append((r, target_col))
     return layout
 
-# --- フォント取得のみ修正（サーバー環境対応） ---
 def get_japanese_font(size):
     font_path = "font.otf"
-    # サーバー上にフォントがなければGoogleからダウンロード
     if not os.path.exists(font_path):
         url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf"
         try:
@@ -150,72 +148,45 @@ def get_japanese_font(size):
     return ImageFont.truetype(font_path, size)
 
 def create_png(seats, num_cols):
-    W, H = 2400, 1800  # 全体のサイズ
+    W, H = 2400, 1800 
     img = Image.new("RGB", (W, H), "#F8F9FA")
     draw = ImageDraw.Draw(img)
-    
-    # フォントサイズを全体的に大きく（特に名前を 60 にアップ）
-    f_t = get_japanese_font(80); f_n = get_japanese_font(60); f_s = get_japanese_font(30); f_p = get_japanese_font(30)
+    f_t = get_japanese_font(80); f_n = get_japanese_font(80); f_s = get_japanese_font(30)
 
-    # --- 1. レイアウト計算 ---
     l_map = main_logic_get_layout(len(seats), num_cols)
     num_rows = max(r for r, c in l_map) + 1
-    
-    # 余白計算（ピン用のスペースを削り、座席を大きく確保）
     cw = (W - 200) // num_cols
     ch = (H - 400) // num_rows 
-    all_full_names = [s['name'] for s in seats]
 
-    # --- 2. 座席の描画 (出力は名字のみ) ---
     for i, seat in enumerate(seats):
         r, c = l_map[i]
         display_row = r
         display_col = (num_cols - 1) - c
-        
         x1, y1 = 100 + display_col * cw + 20, 80 + (num_rows - 1 - display_row) * ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
-        
         draw.rounded_rectangle([x1, y1, x2, y2], radius=25, fill="white", outline="#CBD5E1", width=4)
         mid_x, mid_y = x1 + (x2-x1)//2, y1 + (y2-y1)//2
 
-        # --- 名前と読み仮名の「名字だけ」抽出ロジック ---
+        # 名字抽出ロジック
         full_text = seat['name']
         match = re.match(r"(.+?)[(（](.+?)[)）]", full_text)
-        
         if match:
-            raw_name = match.group(1).strip() # 田中 太郎
-            raw_yomi = match.group(2).strip() # タナカ タロウ
-            
-            # スペースで分割して、最初の要素（名字）だけを取得
-            # 漢字の名字
-            name_parts = re.split(r'[\s　]+', raw_name)
-            last_name_kanji = name_parts[0] if name_parts else raw_name
-            
-            # カタカナの名字
-            yomi_parts = re.split(r'[\s　]+', raw_yomi)
-            last_name_yomi = yomi_parts[0] if yomi_parts else raw_yomi
+            raw_name = match.group(1).strip()
+            raw_yomi = match.group(2).strip()
+            last_name_kanji = re.split(r'[\s　]+', raw_name)[0]
+            last_name_yomi = re.split(r'[\s　]+', raw_yomi)[0]
         else:
-            # カッコがない場合は、そのテキストの最初の名字だけ抜く
-            name_parts = re.split(r'[\s　]+', full_text)
-            last_name_kanji = name_parts[0]
+            last_name_kanji = re.split(r'[\s　]+', full_text)[0]
             last_name_yomi = ""
 
-        # --- 描画 ---
-        # No.番号
         draw.text((mid_x, mid_y - 45), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
-        
-        # 名字のヨミ（カタカナ）
         if last_name_yomi:
             draw.text((mid_x, mid_y - 5), last_name_yomi, fill="#64748B", font=f_s, anchor="mm")
-        
-        # 名字の漢字（大きく表示）
         draw.text((mid_x, mid_y + 45), last_name_kanji, fill="#1E293B", font=f_n, anchor="mm")
-    # --- 3. 教卓の描画 ---
-    # 座席の下に配置（余白を少し調整）
+
     kyotaku_y_start = H - 280 
     draw.rectangle([W//2-250, kyotaku_y_start, W//2+250, kyotaku_y_start + 140], fill="#334155")
     draw.text((W//2, kyotaku_y_start + 70), "教 卓", fill="white", font=f_t, anchor="mm")
-
     buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
 
 def main():
@@ -225,19 +196,17 @@ def main():
 
     with st.sidebar:
         st.title("🏫 席替えやります")
-        
         input_method = st.radio("入力方法", ["コピペで入力", "ファイルから読み込み"])
-        
         processed_names = []
         if input_method == "コピペで入力":
-            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="田中 太郎 タナカタロウ\n...", height=200)
+            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="田中 太郎 タナカタロウ", height=200)
             if raw_names:
                 lines = [line.strip() for line in raw_names.split('\n') if line.strip()]
-                for i, line in enumerate(lines):
-                    parts = re.split(r'[\s\t]+', line)
+                for line in lines:
+                    parts = re.split(r'[\s　\t]+', line)
                     if len(parts) >= 2:
                         yomi = parts[-1]
-                        main_name = "".join(parts[:-1])
+                        main_name = " ".join(parts[:-1])
                         processed_names.append(f"{main_name}({yomi})")
                     else:
                         processed_names.append(line)
@@ -245,7 +214,6 @@ def main():
             file = st.file_uploader("名簿(Excel/CSV)", type=["xlsx", "xls", "csv"])
             if file:
                 df = pd.read_excel(file, header=None) if not file.name.endswith('.csv') else pd.read_csv(file, header=None)
-                # 1列目が氏名、2列目がヨミと仮定して処理（2列目がなければ氏名のみ）
                 for _, row in df.iterrows():
                     val1 = str(row[0]).strip()
                     if len(row) > 1 and pd.notna(row[1]):
@@ -255,10 +223,6 @@ def main():
                         processed_names.append(val1)
 
         num_cols = st.number_input("横の列数", 3, 12, 6)
-        
-        st.divider()
-
-        # 生成・再生成ボタン
         if processed_names:
             btn_label = "🔄 座席を再生成" if st.session_state.seats else "🪑 座席を生成"
             if st.button(btn_label, use_container_width=True):
@@ -283,17 +247,11 @@ def main():
             placeholder = st.empty()
             total_duration = 10.0
             start_time = time.time()
-            
             while True:
                 elapsed = time.time() - start_time
                 remaining = total_duration - elapsed
                 if remaining <= 0: break
-                
-                if remaining > 3.0:
-                    wait_time = 0.05
-                else:
-                    wait_time = 0.05 + (0.55 * (1 - (remaining / 3.0)))
-                
+                wait_time = 0.05 if remaining > 3.0 else 0.05 + (0.55 * (1 - (remaining / 3.0)))
                 temp_seats = shuffle_seats(st.session_state.seats)
                 with placeholder.container():
                     st.markdown(f'<div style="text-align:center; font-size:2.5rem; font-weight:bold; color:#3B82F6; margin-bottom:10px;">席替え中... <span style="color:#EF4444; font-size:3.5rem;">{int(remaining)+1}</span></div>', unsafe_allow_html=True)
@@ -309,15 +267,14 @@ def main():
                                 container_cls = "fixed-seat" if seat.get('fixed') else ""
                                 with cols_ui[c]:
                                     st.markdown(f'<div class="{container_cls}">', unsafe_allow_html=True)
-                                    label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{seat['name']}"
+                                    display_name_ui = re.sub(r'[(（].*?[)）]', '', seat['name']).strip()
+                                    label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{display_name_ui}"
                                     st.button(label, key=f"shuf_{elapsed}_{idx}", disabled=True)
                                     st.markdown('</div>', unsafe_allow_html=True)
                 time.sleep(wait_time)
-            
             st.session_state.seats = shuffle_seats(st.session_state.seats)
             st.session_state.is_shuffling = False
             st.rerun()
-
         else:
             st.markdown('<div class="kyotaku">教 卓</div>', unsafe_allow_html=True)
             l_map = main_logic_get_layout(len(st.session_state.seats), num_cols)
@@ -331,7 +288,8 @@ def main():
                         container_cls = "fixed-seat" if seat.get('fixed') else ("selected-btn" if st.session_state.swap_idx == idx else "")
                         with cols_ui[c]:
                             st.markdown(f'<div class="{container_cls}">', unsafe_allow_html=True)
-                            label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{seat['name']}"
+                            display_name_ui = re.sub(r'[(（].*?[)）]', '', seat['name']).strip()
+                            label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{display_name_ui}"
                             if st.button(label, key=f"btn_{idx}"):
                                 if mode == "ピンで固定する":
                                     st.session_state.seats[idx]['fixed'] = not st.session_state.seats[idx]['fixed']
