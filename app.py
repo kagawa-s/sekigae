@@ -181,13 +181,26 @@ def main():
 
     with st.sidebar:
         st.title("🏫 席替えやります")
-        file = st.file_uploader("名簿(Excel/CSV)", type=["xlsx", "xls", "csv"])
+       # --- 入力方法の選択 ---
+        input_method = st.radio("入力方法", ["コピペで入力", "ファイルから読み込み"])
+        
+        names = []
+        if input_method == "コピペで入力":
+            # テキストエリアを設置
+            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="沼津 太郎\n高専 花子\n...", height=200)
+            if raw_names:
+                # 改行やカンマで区切ってリスト化（空行は除外）
+                names = [n.strip() for n in re.split(r'[\n,、]', raw_names) if n.strip()]
+        else:
+            file = st.file_uploader("名簿(Excel/CSV)", type=["xlsx", "xls", "csv"])
+            if file:
+                df = pd.read_excel(file, header=None) if not file.name.endswith('.csv') else pd.read_csv(file, header=None)
+                names = df[df.columns[df.notna().any()][0]].dropna().astype(str).tolist()
         num_cols = st.number_input("横の列数", 3, 12, 6)
         
-        if file and not st.session_state.seats:
-            df = pd.read_excel(file, header=None) if not file.name.endswith('.csv') else pd.read_csv(file, header=None)
-            names = df[df.columns[df.notna().any()][0]].dropna().astype(str).tolist()
-            if st.button("座席を生成"):
+        # 生成ボタン（namesの中身があるときだけ有効）
+        if names and (not st.session_state.seats or st.button("再生成する")):
+            if st.button("座席を生成") or (input_method == "コピペで入力" and not st.session_state.seats):
                 st.session_state.seats = [{"no": i+1, "name": n, "fixed": False} for i, n in enumerate(names)]
                 st.rerun()
 
