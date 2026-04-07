@@ -153,16 +153,17 @@ def create_png(seats, num_cols):
     W, H = 2400, 1800  # 全体のサイズ
     img = Image.new("RGB", (W, H), "#F8F9FA")
     draw = ImageDraw.Draw(img)
-    f_t = get_japanese_font(70); f_n = get_japanese_font(45); f_s = get_japanese_font(25); f_p = get_japanese_font(30)
+    
+    # フォントサイズを全体的に大きく（特に名前を 60 にアップ）
+    f_t = get_japanese_font(80); f_n = get_japanese_font(60); f_s = get_japanese_font(30); f_p = get_japanese_font(30)
 
     # --- 1. レイアウト計算 ---
     l_map = main_logic_get_layout(len(seats), num_cols)
     num_rows = max(r for r, c in l_map) + 1
     
-    # 余白を考慮したセルの大きさ計算
-    # 左右に100ずつ、上に100、下に300（教卓用）の余白を確保
+    # 余白計算（ピン用のスペースを削り、座席を大きく確保）
     cw = (W - 200) // num_cols
-    ch = (H - 450) // num_rows 
+    ch = (H - 400) // num_rows 
     all_full_names = [s['name'] for s in seats]
 
     # --- 2. 座席の描画 ---
@@ -171,23 +172,29 @@ def create_png(seats, num_cols):
         display_row = r
         display_col = (num_cols - 1) - c
         
-        # y1の開始位置を 80 にして、少し上に寄せます
+        # y1の開始位置を 80 に設定
         x1, y1 = 100 + display_col * cw + 20, 80 + (num_rows - 1 - display_row) * ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
         
-        bg_color, line_color = ("#FFFBEB", "#F59E0B") if seat.get('fixed') else ("white", "#CBD5E1")
-        draw.rounded_rectangle([x1, y1, x2, y2], radius=20, fill=bg_color, outline=line_color, width=3)
+        # 枠線（出力時はシンプルにするため、固定の色分けはなし）
+        draw.rounded_rectangle([x1, y1, x2, y2], radius=25, fill="white", outline="#CBD5E1", width=4)
+        
+        # 中央座標の計算
         mid_x, mid_y = x1 + (x2-x1)//2, y1 + (y2-y1)//2
-        if seat.get('fixed'): draw.text((mid_x, y1 + 40), "📌", fill="#F59E0B", font=f_p, anchor="mm")
-        draw.text((mid_x, mid_y - 10), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
+        
+        # --- 修正箇所：ピンの描画を削除し、名前を中央に ---
+        # No.番号（少し上に配置）
+        draw.text((mid_x, mid_y - 25), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
+        
+        # 名前（座席の中央に大きく配置）
         display_name = get_output_name(seat['name'], all_full_names)
-        draw.text((mid_x, mid_y + 40), display_name, fill="#1E293B", font=f_n, anchor="mm")
+        draw.text((mid_x, mid_y + 35), display_name, fill="#1E293B", font=f_n, anchor="mm")
 
-    # --- 3. 教卓の描画 (位置を微調整) ---
-    # 座席の最終行から少し離し、かつ用紙の底（H=1800）から浮かせます
-    kyotaku_y_start = 120 + num_rows * ch + 30 
-    draw.rectangle([W//2-250, kyotaku_y_start, W//2+250, kyotaku_y_start + 120], fill="#334155")
-    draw.text((W//2, kyotaku_y_start + 60), "教 卓", fill="white", font=f_t, anchor="mm")
+    # --- 3. 教卓の描画 ---
+    # 座席の下に配置（余白を少し調整）
+    kyotaku_y_start = H - 280 
+    draw.rectangle([W//2-250, kyotaku_y_start, W//2+250, kyotaku_y_start + 140], fill="#334155")
+    draw.text((W//2, kyotaku_y_start + 70), "教 卓", fill="white", font=f_t, anchor="mm")
 
     buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
 
