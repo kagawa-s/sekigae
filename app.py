@@ -163,8 +163,13 @@ def create_png(seats, num_cols):
     all_full_names = [s['name'] for s in seats]
     for i, seat in enumerate(seats):
         r, c = l_map[i]
-        x1, y1 = 100 + c*cw + 20, 250 + r*ch + 20
+        
+        # 【追加】教卓（上）に近い方を1行目にするための反転処理
+        display_row = (num_rows - 1) - r 
+        # 【修正】y1 の計算に r ではなく display_row を使う
+        x1, y1 = 100 + c*cw + 20, 250 + display_row*ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
+        
         bg_color, line_color = ("#FFFBEB", "#F59E0B") if seat.get('fixed') else ("white", "#CBD5E1")
         draw.rounded_rectangle([x1, y1, x2, y2], radius=20, fill=bg_color, outline=line_color, width=3)
         mid_x, mid_y = x1 + (x2-x1)//2, y1 + (y2-y1)//2
