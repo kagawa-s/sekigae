@@ -164,10 +164,15 @@ def create_png(seats, num_cols):
     for i, seat in enumerate(seats):
         r, c = l_map[i]
         
-        # 【追加】教卓（上）に近い方を1行目にするための反転処理
-        display_row = (num_rows - 1) - r 
-        # 【修正】y1 の計算に r ではなく display_row を使う
-        x1, y1 = 100 + c*cw + 20, 250 + display_row*ch + 20
+        # 1. 行（縦）：r をそのまま使うことで、No.1 を「一番下の行（教卓側）」にする
+        display_row = r
+        
+        # 2. 列（横）：c を反転させて、No.1 を「左側」にする
+        # Kagawaさんのロジックに合わせて (num_cols - 1) - c とします
+        display_col = (num_cols - 1) - c
+        
+        # 座標計算（y1 のオフセットを調整して、教卓の上に配置）
+        x1, y1 = 100 + display_col * cw + 20, 250 + (num_rows - 1 - display_row) * ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
         
         bg_color, line_color = ("#FFFBEB", "#F59E0B") if seat.get('fixed') else ("white", "#CBD5E1")
