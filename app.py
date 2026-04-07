@@ -166,30 +166,50 @@ def create_png(seats, num_cols):
     ch = (H - 400) // num_rows 
     all_full_names = [s['name'] for s in seats]
 
-    # --- 2. 座席の描画 ---
+    # --- 2. 座席の描画 (出力は名字のみ) ---
     for i, seat in enumerate(seats):
         r, c = l_map[i]
         display_row = r
         display_col = (num_cols - 1) - c
         
-        # y1の開始位置を 80 に設定
         x1, y1 = 100 + display_col * cw + 20, 80 + (num_rows - 1 - display_row) * ch + 20
         x2, y2 = x1 + cw - 40, y1 + ch - 40
         
-        # 枠線（出力時はシンプルにするため、固定の色分けはなし）
         draw.rounded_rectangle([x1, y1, x2, y2], radius=25, fill="white", outline="#CBD5E1", width=4)
-        
-        # 中央座標の計算
         mid_x, mid_y = x1 + (x2-x1)//2, y1 + (y2-y1)//2
-        
-        # --- 修正箇所：ピンの描画を削除し、名前を中央に ---
-        # No.番号（少し上に配置）
-        draw.text((mid_x, mid_y - 25), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
-        
-        # 名前（座席の中央に大きく配置）
-        display_name = get_output_name(seat['name'], all_full_names)
-        draw.text((mid_x, mid_y + 35), display_name, fill="#1E293B", font=f_n, anchor="mm")
 
+        # --- 名前と読み仮名の「名字だけ」抽出ロジック ---
+        full_text = seat['name']
+        match = re.match(r"(.+?)[(（](.+?)[)）]", full_text)
+        
+        if match:
+            raw_name = match.group(1).strip() # 田中 太郎
+            raw_yomi = match.group(2).strip() # タナカ タロウ
+            
+            # スペースで分割して、最初の要素（名字）だけを取得
+            # 漢字の名字
+            name_parts = re.split(r'[\s　]+', raw_name)
+            last_name_kanji = name_parts[0] if name_parts else raw_name
+            
+            # カタカナの名字
+            yomi_parts = re.split(r'[\s　]+', raw_yomi)
+            last_name_yomi = yomi_parts[0] if yomi_parts else raw_yomi
+        else:
+            # カッコがない場合は、そのテキストの最初の名字だけ抜く
+            name_parts = re.split(r'[\s　]+', full_text)
+            last_name_kanji = name_parts[0]
+            last_name_yomi = ""
+
+        # --- 描画 ---
+        # No.番号
+        draw.text((mid_x, mid_y - 45), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
+        
+        # 名字のヨミ（カタカナ）
+        if last_name_yomi:
+            draw.text((mid_x, mid_y - 5), last_name_yomi, fill="#64748B", font=f_s, anchor="mm")
+        
+        # 名字の漢字（大きく表示）
+        draw.text((mid_x, mid_y + 45), last_name_kanji, fill="#1E293B", font=f_n, anchor="mm")
     # --- 3. 教卓の描画 ---
     # 座席の下に配置（余白を少し調整）
     kyotaku_y_start = H - 280 
@@ -205,25 +225,46 @@ def main():
 
     with st.sidebar:
         st.title("🏫 席替えやります")
-       # --- 入力方法の選択 ---
+        
         input_method = st.radio("入力方法", ["コピペで入力", "ファイルから読み込み"])
         
-        names = []
+        processed_names = []
         if input_method == "コピペで入力":
-            # テキストエリアを設置
-            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="沼津 太郎\n高専 花子\n...", height=200)
+            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="田中 太郎 タナカタロウ\n...", height=200)
             if raw_names:
-                # 改行やカンマで区切ってリスト化（空行は除外）
-                names = [n.strip() for n in re.split(r'[\n,、]', raw_names) if n.strip()]
+                lines = [line.strip() for line in raw_names.split('\n') if line.strip()]
+                for i, line in enumerate(lines):
+                    parts = re.split(r'[\s\t]+', line)
+                    if len(parts) >= 2:
+                        yomi = parts[-1]
+                        main_name = "".join(parts[:-1])
+                        processed_names.append(f"{main_name}({yomi})")
+                    else:
+                        processed_names.append(line)
         else:
             file = st.file_uploader("名簿(Excel/CSV)", type=["xlsx", "xls", "csv"])
             if file:
                 df = pd.read_excel(file, header=None) if not file.name.endswith('.csv') else pd.read_csv(file, header=None)
-                names = df[df.columns[df.notna().any()][0]].dropna().astype(str).tolist()
-                
+                # 1列目が氏名、2列目がヨミと仮定して処理（2列目がなければ氏名のみ）
+                for _, row in df.iterrows():
+                    val1 = str(row[0]).strip()
+                    if len(row) > 1 and pd.notna(row[1]):
+                        val2 = str(row[1]).strip()
+                        processed_names.append(f"{val1}({val2})")
+                    else:
+                        processed_names.append(val1)
+
         num_cols = st.number_input("横の列数", 3, 12, 6)
         
         st.divider()
+
+        # 生成・再生成ボタン
+        if processed_names:
+            btn_label = "🔄 座席を再生成" if st.session_state.seats else "🪑 座席を生成"
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.seats = [{"no": i+1, "name": n, "fixed": False} for i, n in enumerate(processed_names)]
+                st.session_state.swap_idx = None
+                st.rerun()
 
         # --- ここを修正：ボタンのロジックをシンプルに ---
         if names:
