@@ -143,7 +143,7 @@ def create_png(seats, num_cols):
     draw = ImageDraw.Draw(img)
     
     # フォントサイズをさらに縮小 (漢字60, ヨミ25)
-    f_t = get_japanese_font(80); f_n = get_japanese_font(60); f_s = get_japanese_font(25); f_no = get_japanese_font(30)
+    f_t = get_japanese_font(80); f_n = get_japanese_font(45); f_s = get_japanese_font(25); f_no = get_japanese_font(30)
 
     l_map = main_logic_get_layout(len(seats), num_cols)
     num_rows = max(r for r, c in l_map) + 1
