@@ -141,13 +141,33 @@ def create_png(seats, num_cols):
     W, H = 2400, 1800 
     img = Image.new("RGB", (W, H), "#F8F9FA")
     draw = ImageDraw.Draw(img)
-    # 漢字フォントを70に微調整（はみ出し防止）
-    f_t = get_japanese_font(80); f_n = get_japanese_font(70); f_s = get_japanese_font(30)
+    
+    # フォントサイズをさらに縮小 (漢字60, ヨミ25)
+    f_t = get_japanese_font(80); f_n = get_japanese_font(60); f_s = get_japanese_font(25); f_no = get_japanese_font(30)
 
     l_map = main_logic_get_layout(len(seats), num_cols)
     num_rows = max(r for r, c in l_map) + 1
     cw = (W - 200) // num_cols
     ch = (H - 400) // num_rows 
+
+    # 同姓チェック用のリスト作成
+    all_last_names = []
+    parsed_data = []
+    for s in seats:
+        match = re.match(r"(.+?)[(（](.+?)[)）]", s['name'])
+        if match:
+            k_parts = re.split(r'[\s　]+', match.group(1).strip())
+            y_parts = re.split(r'[\s　]+', match.group(2).strip())
+            last_k = k_parts[0] if k_parts else ""
+            first_k = k_parts[1] if len(k_parts) > 1 else ""
+            last_y = y_parts[0] if y_parts else ""
+            parsed_data.append({"last_k": last_k, "first_k": first_k, "last_y": last_y})
+            all_last_names.append(last_k)
+        else:
+            k_parts = re.split(r'[\s　]+', s['name'].strip())
+            last_k = k_parts[0] if k_parts else ""
+            parsed_data.append({"last_k": last_k, "first_k": "", "last_y": ""})
+            all_last_names.append(last_k)
 
     for i, seat in enumerate(seats):
         r, c = l_map[i]
@@ -158,27 +178,19 @@ def create_png(seats, num_cols):
         draw.rounded_rectangle([x1, y1, x2, y2], radius=25, fill="white", outline="#CBD5E1", width=4)
         mid_x, mid_y = x1 + (x2-x1)//2, y1 + (y2-y1)//2
 
-        # --- 名字（漢字・ヨミ）抽出ロジック ---
-        # 内部形式: 名字 漢字 名前 漢字(名字ヨミ 名前ヨミ)
-        full_text = seat['name']
-        match = re.match(r"(.+?)[(（](.+?)[)）]", full_text)
-        if match:
-            raw_kanji = match.group(1).strip()
-            raw_yomi = match.group(2).strip()
-            # スペースで分割
-            k_parts = re.split(r'[\s　]+', raw_kanji)
-            y_parts = re.split(r'[\s　]+', raw_yomi)
-            # 名字は1番目の要素、名字ヨミは（通常）1番目
-            last_name_kanji = k_parts[0] if k_parts else raw_kanji
-            last_name_yomi = y_parts[0] if y_parts else raw_yomi
-        else:
-            last_name_kanji = re.split(r'[\s　]+', full_text)[0]
-            last_name_yomi = ""
+        # 同姓なら名前の1文字目を追加
+        p = parsed_data[i]
+        display_kanji = p['last_k']
+        if all_last_names.count(p['last_k']) > 1 and p['first_k']:
+            display_kanji += p['first_k'][0]
+        
+        display_yomi = p['last_y']
 
-        draw.text((mid_x, mid_y - 45), f"No.{seat['no']}", fill="#64748B", font=f_s, anchor="mm")
-        if last_name_yomi:
-            draw.text((mid_x, mid_y - 5), last_name_yomi, fill="#64748B", font=f_s, anchor="mm")
-        draw.text((mid_x, mid_y + 45), last_name_kanji, fill="#1E293B", font=f_n, anchor="mm")
+        # 描画
+        draw.text((mid_x, mid_y - 45), f"No.{seat['no']}", fill="#64748B", font=f_no, anchor="mm")
+        if display_yomi:
+            draw.text((mid_x, mid_y - 5), display_yomi, fill="#64748B", font=f_s, anchor="mm")
+        draw.text((mid_x, mid_y + 45), display_kanji, fill="#1E293B", font=f_n, anchor="mm")
 
     kyotaku_y_start = H - 280 
     draw.rectangle([W//2-250, kyotaku_y_start, W//2+250, kyotaku_y_start + 140], fill="#334155")
@@ -195,18 +207,16 @@ def main():
         input_method = st.radio("入力方法", ["コピペで入力", "ファイルから読み込み"])
         processed_names = []
         if input_method == "コピペで入力":
-            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="名字 漢字 名前 漢字 名字フリガナ 名前フリガナ", height=200)
+            raw_names = st.text_area("学生氏名を貼り付けてください", placeholder="名字 名前 名字ヨミ 名前ヨミ", height=200)
             if raw_names:
                 lines = [line.strip() for line in raw_names.split('\n') if line.strip()]
                 for line in lines:
                     parts = re.split(r'[\s　\t]+', line)
                     if len(parts) >= 4:
-                        # 名字 名前 ヨミ1 ヨミ2 形式
                         kanji_full = f"{parts[0]} {parts[1]}"
                         yomi_full = f"{parts[2]} {parts[3]}"
                         processed_names.append(f"{kanji_full}({yomi_full})")
                     elif len(parts) >= 2:
-                        # 名字 ヨミ 形式など
                         processed_names.append(f"{parts[0]}({parts[1]})")
                     else:
                         processed_names.append(line)
@@ -264,7 +274,6 @@ def main():
                                 container_cls = "fixed-seat" if seat.get('fixed') else ""
                                 with cols_ui[c]:
                                     st.markdown(f'<div class="{container_cls}">', unsafe_allow_html=True)
-                                    # Web表示ではフリガナ(カッコ)を除去
                                     display_name_ui = re.sub(r'[(（].*?[)）]', '', seat['name']).strip()
                                     label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{display_name_ui}"
                                     st.button(label, key=f"shuf_{elapsed}_{idx}", disabled=True)
@@ -286,7 +295,6 @@ def main():
                         container_cls = "fixed-seat" if seat.get('fixed') else ("selected-btn" if st.session_state.swap_idx == idx else "")
                         with cols_ui[c]:
                             st.markdown(f'<div class="{container_cls}">', unsafe_allow_html=True)
-                            # Web表示ではフリガナ(カッコ)を除去
                             display_name_ui = re.sub(r'[(（].*?[)）]', '', seat['name']).strip()
                             label = f"{'📌' if seat.get('fixed') else ' '}\nNo.{seat['no']}\n{display_name_ui}"
                             if st.button(label, key=f"btn_{idx}"):
